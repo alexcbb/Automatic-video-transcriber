@@ -58,6 +58,14 @@ def get_current_text(text_timestamps, frametime):
             return text
     return 'ERREUR TEXTE'
 
+def get_current_word(word_timestamps, frametime):
+    for timestamp, word in word_timestamps:
+        if frametime > timestamp[0] and frametime < timestamp[1]:
+            return word
+    return 'ERREUR TEXTE'
+
+# TODO : add a function to animate the text
+
 if __name__ == '__main__':
     # TODO : setup an argparse
     # Parameters 
@@ -69,8 +77,9 @@ if __name__ == '__main__':
     audio_path = f"{filename}.wav"
     #font_path = "C:\\Users\\alexc\\AppData\\Local\\Microsoft\\Windows\\Fonts\\built titling bd.ttf"
     font_path = "C:\\Users\\alexc\\AppData\\Local\\Microsoft\\Windows\\Fonts\\BurbankBigCondensed-Black.otf"
-    font_size = 200
+    font_size = 150
     text_color = (255, 255, 255)
+    highlight_color = (255, 255, 0)
     stroke_color = (0, 0, 0)
     stroke_width = 20
 
@@ -117,12 +126,26 @@ if __name__ == '__main__':
 
         current_time = current_frame_id / fps
         text = get_current_text(text_timestamps, current_time)
-
+        words = text.split()
+        word_sizes = [draw.textsize(word, font=font) for word in words]
         text_width, text_height = draw.textsize(text, font=font)
         text_origin = ((frame_width - text_width) // 2,  text_height + 100)
 
-        draw.text(text_origin, text, font=font, fill=text_color, stroke_width=stroke_width, stroke_fill=stroke_color)
-        #draw.text(text_origin, text, font=font, fill=text_color)
+        highlighted_word = get_current_word(word_timestamps, current_time)
+        current_pos = text_origin[0] - 40 * (len(words) - 1)
+        for word, size in zip(words, word_sizes):
+            #print(f"Word {word} VS Highlight : {highlighted_word}")
+            # Check if the word needs to be highlighted
+            if highlighted_word.lower().replace(" ", "") == word.lower().replace(" ", ""):
+                # Draw the highlighted word with a different color
+                draw.text((current_pos, text_origin[1]), word, font=font, fill=highlight_color, stroke_width=stroke_width, stroke_fill=stroke_color)
+            else:
+                # Draw the regular word with the default color
+                draw.text((current_pos, text_origin[1]), word, font=font, fill=text_color, stroke_width=stroke_width, stroke_fill=stroke_color)
+
+            # Update the starting position for the next word
+            current_pos += (size[0] + 40)
+        #draw.text(text_origin, text, font=font, fill=text_color, stroke_width=stroke_width, stroke_fill=stroke_color)
 
         # Convert the PIL Image back to OpenCV format
         frame_with_text = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
@@ -130,7 +153,7 @@ if __name__ == '__main__':
         out.write(frame_with_text)
 
         # Display the frame (optional)
-        imS = cv2.resize(frame_with_text, (450, 800))                # Resize image
+        imS = cv2.resize(frame_with_text, (450, 800))
         cv2.imshow('Overview...', imS)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
