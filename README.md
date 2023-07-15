@@ -4,10 +4,15 @@ The idea is to create an automatic and customizable open-source transcriber for 
 
 # Feature list 
 - [x] Automatic transcription
-- [ ] Enhance the transcription
-- [ ] Text animation
+- [x] Enhance the transcription
+- [ ] Align text correctly
+- [ ] Fix problem with text outside of scope
+- [ ] Save text to file and load existing text (separate Whisper transcript and text showing up)
+- [ ] Text animation :
+    - [ ] Change orientation
+    - [ ] Zoom in higlight
+    - [ ] Random highlight color
 - [ ] Choose font
 - [ ] Create a GUI
-- [ ] Load existing text (separate Whisper transcript and text showing up)
 - [ ] Automatic emoji to text
 - [ ] More ? Contact me at my mail : beegbraincontact@gmail.com
