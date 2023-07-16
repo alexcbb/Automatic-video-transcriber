@@ -10,8 +10,9 @@ The idea is to create an automatic and customizable open-source transcriber for 
 - [ ] Save text to file and load existing text (separate Whisper transcript and text showing up)
 - [ ] Text animation :
     - [ ] Change orientation
-    - [ ] Zoom in higlight
-    - [ ] Random highlight color
+    - [x] Zoom in higlight
+        - [x] Fix issue on text hidden for highlight
+    - [ ] Random highlight color (Not sure if interesting)
 - [ ] Choose font
 - [ ] Create a GUI
 - [ ] Automatic emoji to text

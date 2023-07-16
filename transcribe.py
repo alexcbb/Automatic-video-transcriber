@@ -5,6 +5,8 @@ from moviepy.editor import VideoFileClip, AudioFileClip
 import whisper
 import os
 import pickle
+import random
+import PySimpleGUI as sg
 
 def extract_word_timestamps(audio_path : str, whisper_size : str ="large", language : str = "French"):
     """Function that takes the path of an audio to extract the transcription
@@ -100,16 +102,15 @@ def get_current_word(word_timestamps, frametime):
 def draw_text_on_image(
         text_timestamps, 
         draw, 
-        fps, 
-        current_frame_id, 
+        current_time,
         font, 
+        highlight_font,
         frame_width,
         word_timestamps,
         offset_top,
         pil_image,
         to_pil=True):
     
-    current_time = current_frame_id / fps
     text = get_current_text(text_timestamps, current_time)
     words = text.split()
     word_sizes = [draw.textsize(word, font=font) for word in words]
@@ -118,15 +119,16 @@ def draw_text_on_image(
 
     highlighted_word = get_current_word(word_timestamps, current_time)
     current_pos = text_origin[0]
+    highlight_space = 0
     for word, size in zip(words, word_sizes):
-        #print(f"Word {word} VS Highlight : {highlighted_word}")
         # Check if the word needs to be highlighted
         if highlighted_word.lower().replace(" ", "") == word.lower().replace(" ", ""):
             # Draw the highlighted word with a different color
-            draw.text((current_pos, text_origin[1]), word, font=font, fill=highlight_color, stroke_width=stroke_width, stroke_fill=stroke_color)
+            draw.text((current_pos-4, text_origin[1]-4), word, font=highlight_font, fill=highlight_color, stroke_width=stroke_width, stroke_fill=stroke_color)
+            highlight_space = 10
         else:
             # Draw the regular word with the default color
-            draw.text((current_pos, text_origin[1]), word, font=font, fill=text_color, stroke_width=stroke_width, stroke_fill=stroke_color)
+            draw.text((current_pos+highlight_space, text_origin[1]), word, font=font, fill=text_color, stroke_width=stroke_width, stroke_fill=stroke_color)
 
         # Update the starting position for the next word
         current_pos += (size[0] + 20) 
@@ -136,9 +138,7 @@ def draw_text_on_image(
     # Convert the PIL Image back to OpenCV format
     return cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
 
-# TODO : add a function to animate the text
-
-if __name__ == '__main__':
+def edit_video():
     # TODO : setup an argparse
     # Parameters 
     video_path = "short.mp4"
@@ -154,6 +154,7 @@ if __name__ == '__main__':
     highlight_color = (255, 255, 0)
     stroke_color = (0, 0, 0)
     stroke_width = 10
+    counter_color_change = 0
 
     ################################
     #  Handle audio transcription  #  
@@ -185,6 +186,11 @@ if __name__ == '__main__':
     out = cv2.VideoWriter(temp_path, fourcc, fps, (frame_width, frame_height))
 
     current_frame_id = 0
+    font = ImageFont.truetype(font_path, font_size)
+    highlight_font = ImageFont.truetype(font_path, font_size+4)
+
+    old_text = get_current_text(line_1, 0) + ' ' + get_current_text(line_2, 0)
+
     # Process each frame of the video
     while cap.isOpened():
         ret, frame = cap.read()
@@ -195,13 +201,14 @@ if __name__ == '__main__':
 
         # Draw the text and prompt on the PIL Image
         draw = ImageDraw.Draw(pil_image)
-        font = ImageFont.truetype(font_path, font_size)
+
+        current_time = current_frame_id / fps
 
         frame_text_1 = draw_text_on_image(
-            line_1, draw, fps, current_frame_id, font,
+            line_1, draw, current_time, font, highlight_font,
             frame_width, word_timestamps, 50, pil_image)
         frame_text_2 =draw_text_on_image(
-            line_2, draw, fps, current_frame_id, font,
+            line_2, draw, current_time, font, highlight_font,
             frame_width, word_timestamps, 150, frame_text_1, to_pil=False)
 
         out.write(frame_text_2)
@@ -224,4 +231,43 @@ if __name__ == '__main__':
     audio_clip = AudioFileClip(audio_path)
     final_clip = final_clip.set_audio(audio_clip)
     final_clip.write_videofile(final_path)
+
+if __name__ == '__main__':
+    #edit_video()
+
+    # TODO : use https://github.com/PySimpleGUI/PySimpleGUI/blob/master/DemoPrograms/Demo_Font_String.py 
+    # to handle fonts
+    fonts = sg.Text.fonts_installed_list()
+
+    sg.theme('Black')
+
+    layout = [[sg.Text('My Text Element',
+                    size=(20, 1),
+                    click_submits=True,
+                    relief=sg.RELIEF_GROOVE,
+                    font='Courier` 25',
+                    text_color='#FF0000',
+                    background_color='white',
+                    justification='center',
+                    pad=(5, 3),
+                    key='-text-',
+                    tooltip='This is a text element',
+                    )],
+            [sg.Listbox(fonts, size=(30, 20), change_submits=True, key='-list-')],
+            [sg.Input(key='-in-')],
+            [sg.Button('Read', bind_return_key=True), sg.Exit()]]
+
+    window = sg.Window('My new window', layout)
+
+    while True:     # Event Loop
+        event, values = window.read()
+        if event in (sg.WIN_CLOSED, 'Exit'):
+            break
+        text_elem = window['-text-']
+        print(event, values)
+        if values['-in-'] != '':
+            text_elem.update(font=values['-in-'])
+        else:
+            text_elem.update(font=(values['-list-'][0], 25))
+    window.close()
 
