@@ -205,6 +205,7 @@ if __name__ == '__main__':
 
     out = cv2.VideoWriter(temp_path, fourcc, fps, (frame_width, frame_height))
 
+    # TODO : add a pre-defined set of sizes for font size
     ### Prepare the layout 
     layout = [
             [sg.Column(
@@ -222,9 +223,6 @@ if __name__ == '__main__':
                     )],
                 [sg.Listbox(fonts, size=(30, 20), change_submits=True, key='-list-')],
 
-                [sg.CB('Gras', key='-bold-', change_submits=True),
-                    sg.CB('Italique', key='-italics-', change_submits=True),
-                    sg.CB('Soulignement', key='-underline-', change_submits=True)],
                 [sg.Input(key='-font_size-', change_submits=True, size=(10, 5)),
                     sg.Text('Taille du texte (doit être un nombre !)')],
                 [sg.Button('Exporter')]
@@ -348,22 +346,27 @@ if __name__ == '__main__':
             for path in all_font_path:
                 if values['-list-'][0] == path.split("\\")[-1].split(".")[0]:
                     font_path = path
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
         else: 
             tuple_font.append('Helvetica')
         if values['-font_size-']:
             font_size = int(values['-font_size-'])
             tuple_font.append(values['-font_size-'])
+            font = ImageFont.truetype(font_path, font_size)
+            highlight_font = ImageFont.truetype(font_path, font_size+4)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
         else:
             font_size = 20
             tuple_font.append("20")
+            font = ImageFont.truetype(font_path, font_size)
+            highlight_font = ImageFont.truetype(font_path, font_size+4)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
         if values['-bold-']:
             tuple_font.append('bold')
         if values['-italics-']:
             tuple_font.append('italic')
         if values['-underline-']:
             tuple_font.append('underline')
-        font = ImageFont.truetype(font_path, font_size)
-        highlight_font = ImageFont.truetype(font_path, font_size+4)
         #text_elem.update(font=tuple(tuple_font))
     window.close()
 

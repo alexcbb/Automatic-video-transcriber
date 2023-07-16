@@ -13,7 +13,7 @@ The idea is to create an automatic and customizable open-source transcriber for 
     - [x] Zoom in higlight
         - [x] Fix issue on text hidden for highlight
     - [ ] Random highlight color (Not sure if interesting)
-- [ ] Choose font
-- [ ] Create a GUI
+- [x] Choose font
+- [x] Create a GUI
 - [ ] Automatic emoji to text
 - [ ] More ? Contact me at my mail : beegbraincontact@gmail.com
