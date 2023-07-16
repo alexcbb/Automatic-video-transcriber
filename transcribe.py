@@ -63,7 +63,7 @@ def process_words(word_timestamps):
     start = 0
     j=0
     for timestamp, word in new_words:
-        if j == 3:
+        if j == 2:
             j=0
             if is_line_1:
                 line_1.append(([start, timestamp[0]], current_txt[:-1]))
@@ -108,6 +108,7 @@ def draw_text_on_image(
         offset_top,
         pil_image,
         to_pil=True):
+    
     current_time = current_frame_id / fps
     text = get_current_text(text_timestamps, current_time)
     words = text.split()
@@ -116,7 +117,7 @@ def draw_text_on_image(
     text_origin = ((frame_width - text_width) // 2,  text_height + offset_top)
 
     highlighted_word = get_current_word(word_timestamps, current_time)
-    current_pos = text_origin[0] - 40 * (len(words) - 1)
+    current_pos = text_origin[0]
     for word, size in zip(words, word_sizes):
         #print(f"Word {word} VS Highlight : {highlighted_word}")
         # Check if the word needs to be highlighted
@@ -128,7 +129,7 @@ def draw_text_on_image(
             draw.text((current_pos, text_origin[1]), word, font=font, fill=text_color, stroke_width=stroke_width, stroke_fill=stroke_color)
 
         # Update the starting position for the next word
-        current_pos += (size[0] + 40)
+        current_pos += (size[0] + 20) 
 
     if to_pil:
         return pil_image
@@ -140,15 +141,15 @@ def draw_text_on_image(
 if __name__ == '__main__':
     # TODO : setup an argparse
     # Parameters 
-    video_path = "new_short.mp4"
-    temp_path = "new_temp.mp4"
-    final_path = "new_final.mp4"
-    transcript_path = None #"word_timestamps.txt"
+    video_path = "short.mp4"
+    temp_path = "temp.mp4"
+    final_path = "final.mp4"
+    transcript_path = "word_timestamps.txt"
     filename, ext = os.path.splitext(video_path)
     audio_path = f"{filename}.wav"
     #font_path = "C:\\Users\\alexc\\AppData\\Local\\Microsoft\\Windows\\Fonts\\built titling bd.ttf"
-    font_path = "C:\\Users\\alexc\\AppData\\Local\\Microsoft\\Windows\\Fonts\\BurbankBigCondensed-Black.otf"
-    font_size = 100
+    font_path = "C:\\Users\\alexc\\AppData\\Local\\Microsoft\\Windows\\Fonts\\Montserrat-ExtraBold.otf"
+    font_size = 70
     text_color = (255, 255, 255)
     highlight_color = (255, 255, 0)
     stroke_color = (0, 0, 0)

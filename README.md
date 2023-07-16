@@ -5,8 +5,8 @@ The idea is to create an automatic and customizable open-source transcriber for 
 # Feature list 
 - [x] Automatic transcription
 - [x] Enhance the transcription
-- [ ] Align text correctly
-- [ ] Fix problem with text outside of scope
+- [x] Align text correctly
+- [x] Fix problem with text outside of scope
 - [ ] Save text to file and load existing text (separate Whisper transcript and text showing up)
 - [ ] Text animation :
     - [ ] Change orientation
