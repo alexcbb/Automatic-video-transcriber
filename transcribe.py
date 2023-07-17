@@ -8,8 +8,9 @@ import pickle
 import random
 import PySimpleGUI as sg
 import matplotlib.font_manager as fm
+import math
 
-def extract_word_timestamps(audio_path : str, whisper_size : str ="large", language : str = "French"):
+def extract_word_timestamps(audio_path : str, whisper_size : str ="medium", language : str = "French"):
     """Function that takes the path of an audio to extract the transcription
 
         Args:
@@ -22,7 +23,7 @@ def extract_word_timestamps(audio_path : str, whisper_size : str ="large", langu
     """
     # load model and audio
     model = whisper.load_model(whisper_size)
-    model.to("cuda")
+    #model.to("cuda")
     audio = whisper.load_audio(audio_path)
 
     # decode the audio
@@ -132,21 +133,93 @@ def draw_text_on_image(
             draw.text((current_pos+highlight_space, text_origin[1]), word, font=font, fill=text_color, stroke_width=stroke_width, stroke_fill=stroke_color)
 
         # Update the starting position for the next word
-        current_pos += (size[0] + 20) 
+        current_pos += (size[0] + 20)
 
     if to_pil:
         return pil_image
     # Convert the PIL Image back to OpenCV format
     return cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
 
-def export_video():
-    pass
+def edit_video(font, 
+               highlight_font, 
+               line_1, 
+               line_2, 
+               word_timestamps,
+               cap,
+               final_path,
+               audio_path):
+    temp_path = "temp.mp4"
+        
+    ################################
+    #   Draw text back to video    #  
+    ################################
+    # Define the output video codec and create a VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    totalFrames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+    out = cv2.VideoWriter(temp_path, fourcc, fps, (frame_width, frame_height))
+    line_thickness = 10
+
+    current_frame_id = 0
+    # Process each frame of the video
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        # Convert the frame to PIL Image
+        pil_image = Image.fromarray(cv2.cvtColor(np.array(frame), cv2.COLOR_BGR2RGB))
+
+        # Draw the text and prompt on the PIL Image
+        draw = ImageDraw.Draw(pil_image)
+
+        current_time = current_frame_id / fps
+
+        frame_text_1 = draw_text_on_image(
+            line_1, draw, current_time, font, highlight_font,
+            frame_width, word_timestamps, 50, pil_image)
+        frame_text_2 =draw_text_on_image(
+            line_2, draw, current_time, font, highlight_font,
+            frame_width, word_timestamps, 150, frame_text_1, to_pil=False)
+        
+        out.write(frame_text_2)
+
+        # Display the frame (optional)
+        imS = cv2.resize(frame_text_2, (450, 800))
+        ### Draw a progress bar
+        complete = current_frame_id / totalFrames
+        y = math.ceil(imS.shape[1] - imS.shape[1]/25)
+        x = 0
+        w = imS.shape[0]
+        cv2.putText(imS, f"Progression {complete*100}%", org=(20, y), fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
+                    fontScale=1, color=(0, 0, 255), thickness = 2, lineType=cv2.LINE_AA)
+        cv2.line(imS, (x, y), (w, y), (255,255,255), line_thickness)
+        cv2.line(imS, (x, y), (math.ceil(w*complete), y), (0,0,255), line_thickness)
+
+        cv2.imshow('En cours d\'exportation...', imS)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+        current_frame_id += 1
+
+    # Release the video capture and writer objects
+    cap.release()
+    out.release()
+
+    # Destroy any remaining windows
+    cv2.destroyAllWindows()
+
+    final_clip = VideoFileClip(temp_path)
+    audio_clip = AudioFileClip(audio_path)
+    final_clip = final_clip.set_audio(audio_clip)
+    final_clip.write_videofile(final_path)
 
 if __name__ == '__main__':
     # TODO : setup an argparse system
     ################################
     #      Prepare parameters      #  
     ################################
+    # TODO : set the video path in the system
     video_path = "short.mp4"
     temp_path = "temp.mp4"
     final_path = "final.mp4"
@@ -154,7 +227,6 @@ if __name__ == '__main__':
     filename, ext = os.path.splitext(video_path)
     audio_path = f"{filename}.wav"
     font_path = "C:\\Users\\alexc\\AppData\\Local\\Microsoft\\Windows\\Fonts\\Montserrat-ExtraBold.otf"
-    font_size = 70
     text_color = (255, 255, 255)
     highlight_color = (255, 255, 0)
     stroke_color = (0, 0, 0)
@@ -191,182 +263,112 @@ if __name__ == '__main__':
         fonts.append(path.split("\\")[-1].split(".")[0])
     fonts.sort()
 
-    # List all available fonts
     sg.theme('Black')
     
     cap = cv2.VideoCapture(video_path)
-    
-    # Define the output video codec and create a VideoWriter object
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     fps = cap.get(cv2.CAP_PROP_FPS)
     num_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    out = cv2.VideoWriter(temp_path, fourcc, fps, (frame_width, frame_height))
-
-    # TODO : add a pre-defined set of sizes for font size
     ### Prepare the layout 
     layout = [
             [sg.Column(
-                [[sg.Text('Exemple de texte',
-                    size=(20, 1),
-                    click_submits=True,
-                    relief=sg.RELIEF_GROOVE,
-                    font='Courier` 25',
-                    text_color='#000000',
-                    background_color='white',
-                    justification='center',
-                    pad=(5, 3),
-                    key='-text-',
-                    tooltip='Exemple du texte qui sera affiché dans la vidéo',
-                    )],
+                [
                 [sg.Listbox(fonts, size=(30, 20), change_submits=True, key='-list-')],
-
-                [sg.Input(key='-font_size-', change_submits=True, size=(10, 5)),
-                    sg.Text('Taille du texte (doit être un nombre !)')],
-                [sg.Button('Exporter')]
+                [sg.Text("Taille de la police :")],
+                [sg.Slider(range=(30, 130), size=(15, 10), orientation='h', key='-font_size-', change_submits=True)],
+                [sg.Button('Exporter', key='-export-')]
                 ], 
                 element_justification='c'
             ),
             sg.Column(
                 [
                     [sg.Image(key='-image-')],
+                    [sg.Text(text="", key='-error-', text_color="Red", font=('Arial Bold', 10))],
                     [sg.Slider(range=(0, num_frames), size=(30, 10), orientation='h', key='-vid_slider-', change_submits=True)],
                 ], 
                 element_justification='c'
             )]]
 
-    window = sg.Window('Video transcripteur automatique', layout, size=(1280, 720))
+    window = sg.Window('OpenSubVoice', 
+                       layout, 
+                       icon="assets/icon_2.ico", 
+                       size=(1280, 720), )
 
-    ###Locate the elements we'll be updating. Does the search only 1 time
     image_elem = window['-image-']
     slider_elem = window['-vid_slider-']
+    error_elem = window['-error-']
     timeout = 1000//fps  
-    text_elem = window['-text-']
-
+    
     
     ################################
     #   Draw text back to video    #  
     ################################
-    """cap = cv2.VideoCapture(video_path)
-
-
-    current_frame_id = 0
-
-    # Process each frame of the video
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-        # Convert the frame to PIL Image
-        pil_image = Image.fromarray(cv2.cvtColor(np.array(frame), cv2.COLOR_BGR2RGB))
-
-        # Draw the text and prompt on the PIL Image
-        draw = ImageDraw.Draw(pil_image)
-
-        current_time = current_frame_id / fps
-
-        frame_text_1 = draw_text_on_image(
-            line_1, draw, current_time, font, highlight_font,
-            frame_width, word_timestamps, 50, pil_image)
-        frame_text_2 =draw_text_on_image(
-            line_2, draw, current_time, font, highlight_font,
-            frame_width, word_timestamps, 150, frame_text_1, to_pil=False)
-
-        out.write(frame_text_2)
-
-        # Display the frame (optional)
-        imS = cv2.resize(frame_text_2, (450, 800))
-        cv2.imshow('Overview...', imS)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-        current_frame_id += 1
-
-    # Release the video capture and writer objects
-    cap.release()
-    out.release()
-
-    # Destroy any remaining windows
-    cv2.destroyAllWindows()
-
-    final_clip = VideoFileClip(temp_path)
-    audio_clip = AudioFileClip(audio_path)
-    final_clip = final_clip.set_audio(audio_clip)
-    final_clip.write_videofile(final_path)"""
-
     cur_frame = 0
-    font = ImageFont.truetype(font_path, font_size)
-    highlight_font = ImageFont.truetype(font_path, font_size+4)
+    font = ImageFont.truetype(font_path, 40)
+    highlight_font = ImageFont.truetype(font_path, 44)
 
     old_text = get_current_text(line_1, 0) + ' ' + get_current_text(line_2, 0)
     ### Open the video
     while True:     
-        ### Read the events
-        event, values = window.read()
-        if event in (sg.WIN_CLOSED, 'Exit'):
-            break
+        try:
+            ### Read the events
+            event, values = window.read()
+            print(f"{event}, {values}")
+            if event in (sg.WIN_CLOSED, 'Exit'):
+                break
 
-        ret, frame = cap.read()
+            ret, frame = cap.read()
 
-        ### Update frame with slider
-        if int(values['-vid_slider-']) != cur_frame-1:
-            cur_frame = int(values['-vid_slider-'])
-            cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
-        slider_elem.update(cur_frame)
-        
-        # Convert the frame to PIL Image
-        pil_image = Image.fromarray(cv2.cvtColor(np.array(frame), cv2.COLOR_BGR2RGB))
+            ### Update frame with slider
+            if int(values['-vid_slider-']) != cur_frame-1:
+                cur_frame = int(values['-vid_slider-'])
+                cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
+            slider_elem.update(cur_frame)
+            
+            # Convert the frame to PIL Image
+            pil_image = Image.fromarray(cv2.cvtColor(np.array(frame), cv2.COLOR_BGR2RGB))
 
-        # Draw the text and prompt on the PIL Image
-        draw = ImageDraw.Draw(pil_image)
+            # Draw the text and prompt on the PIL Image
+            draw = ImageDraw.Draw(pil_image)
 
-        current_time = cur_frame / fps
+            current_time = cur_frame / fps
 
-        frame_text_1 = draw_text_on_image(
-            line_1, draw, current_time, font, highlight_font,
-            frame_width, word_timestamps, 50, pil_image)
-        frame_text_2 = draw_text_on_image(
-            line_2, draw, current_time, font, highlight_font,
-            frame_width, word_timestamps, 150, frame_text_1, to_pil=False)
+            frame_text_1 = draw_text_on_image(
+                line_1, draw, current_time, font, highlight_font,
+                frame_width, word_timestamps, 50, pil_image)
+            frame_text_2 = draw_text_on_image(
+                line_2, draw, current_time, font, highlight_font,
+                frame_width, word_timestamps, 150, frame_text_1, to_pil=False)
 
-        out.write(frame_text_2)
+            # Display the frame
+            imS = cv2.resize(frame_text_2, (360, 640))
+            imgbytes = cv2.imencode('.png', imS)[1].tobytes()  
+            image_elem.update(data=imgbytes)
+            
+            ### Handle font
+            if values['-list-']:
+                for path in all_font_path:
+                    if values['-list-'][0] == path.split("\\")[-1].split(".")[0]:
+                        font_path = path
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
+            if values['-font_size-']:
+                font_size = int(values['-font_size-'])
+                font = ImageFont.truetype(font_path, font_size)
+                highlight_font = ImageFont.truetype(font_path, font_size+4)
+                cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
+            else:
+                font_size = 80
+                font = ImageFont.truetype(font_path, font_size)
+                highlight_font = ImageFont.truetype(font_path, font_size+4)
+                cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)   
+            if event == '-export-':
+                edit_video(font, highlight_font, line_1, line_2, 
+                           word_timestamps, cap, final_path, audio_path)
+                break
 
-        # Display the frame (optional)
-        imS = cv2.resize(frame_text_2, (360, 640))
-
-        # TODO : try to use PIl as done in existing function
-        imgbytes = cv2.imencode('.png', imS)[1].tobytes()  
-        image_elem.update(data=imgbytes)
-        
-        ### Handle font
-        tuple_font = []
-        if values['-list-']:
-            tuple_font.append(values['-list-'][0])
-            for path in all_font_path:
-                if values['-list-'][0] == path.split("\\")[-1].split(".")[0]:
-                    font_path = path
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
-        else: 
-            tuple_font.append('Helvetica')
-        if values['-font_size-']:
-            font_size = int(values['-font_size-'])
-            tuple_font.append(values['-font_size-'])
-            font = ImageFont.truetype(font_path, font_size)
-            highlight_font = ImageFont.truetype(font_path, font_size+4)
-            cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
-        else:
-            font_size = 20
-            tuple_font.append("20")
-            font = ImageFont.truetype(font_path, font_size)
-            highlight_font = ImageFont.truetype(font_path, font_size+4)
-            cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
-        if values['-bold-']:
-            tuple_font.append('bold')
-        if values['-italics-']:
-            tuple_font.append('italic')
-        if values['-underline-']:
-            tuple_font.append('underline')
-        #text_elem.update(font=tuple(tuple_font))
+        except Exception as inst:
+            error_elem.update("Erreur : " + str(inst) + "; redémarrez l'application")
     window.close()
 
