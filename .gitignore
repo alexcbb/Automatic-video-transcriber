@@ -3,3 +3,5 @@
 _pycache_
 *.png
 *.jpeg
+*.wav
+*.txt

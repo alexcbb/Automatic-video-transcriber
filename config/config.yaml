@@ -1,0 +1,5 @@
+path:
+  video_path: "short.mp4"
+  temp_path: "temp.mp4"
+  final_path: "final.mp4"
+  transcript_path: "word_timestamps.txt"
