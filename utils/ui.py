@@ -75,7 +75,8 @@ def display_notification(title, message, is_success=True, display_duration_in_ms
 
     window.close()
 
-def make_window(fonts, num_frames, line_1, line_2, light_mode=False):
+
+def make_window(fonts, num_frames, light_mode=False):
     if light_mode:
         sg.theme('light grey')
     else:
@@ -89,33 +90,49 @@ def make_window(fonts, num_frames, line_1, line_2, light_mode=False):
     LIGHT_GRAY_BUTTON_COLOR = f'#212021 on #e0e0e0'
     DARK_GRAY_BUTTON_COLOR = '#e0e0e0 on #212021'
 
-    menu_def = [['Fichier', ['Nouveau', 'Ouvrir', 'Enregistrer', 'Exporter','Quitter', ]],  ['Aide', 'A propos...']]
+    menu_def = [['Fichier', ['Ouvrir', 'Exporter','Quitter', ]],  ['Aide', 'A propos...']]
+
+    theme_editor_column = [
+                    [sg.Listbox(fonts, size=(30, 20), change_submits=True, key='-list-')],
+                    [sg.Text("Taille de la police :")],
+                    [sg.Slider(range=(30, 130), size=(15, 10), orientation='h', key='-font_size-', change_submits=True)]
+                ]
+
+    video_viewer_column = [
+                    [sg.Image(key='-image-')],
+                    [sg.Text(text="", key='-error-', text_color="Red", font=('Arial Bold', 10))],
+                    [sg.Slider(range=(0, num_frames-1), size=(30, 10), orientation='h', key='-vid_slider-', change_submits=True)],
+                ]
+    
+    transcripts_colum = [
+        [sg.Text('Transcriptions')]
+    ]
+
+    export_button= [[sg.Button('Exporter', size=(10, 2), key='-export-', 
+                               button_color=LIGHT_GRAY_BUTTON_COLOR if light_mode else DARK_GRAY_BUTTON_COLOR)]]
+
     ### Prepare the layout 
     layout = [
             [sg.MenubarCustom(menu_def, pad=(0,0), k='-cust_menubar-')],
-            [sg.Column(
-                [
-                [sg.Listbox(fonts, size=(30, 20), change_submits=True, key='-list-')],
-                [sg.Text("Taille de la police :")],
-                [sg.Slider(range=(30, 130), size=(15, 10), orientation='h', key='-font_size-', change_submits=True)],
-                [sg.Button('Exporter', size=(10, 2), key='-export-', button_color=LIGHT_GRAY_BUTTON_COLOR if light_mode else DARK_GRAY_BUTTON_COLOR)]
-                ], 
-                element_justification='c'
-            ),
-            sg.Column(
-                [
-                    [sg.Image(key='-image-')],
-                    [sg.Text(text="", key='-error-', text_color="Red", font=('Arial Bold', 10))],
-                    [sg.Slider(range=(0, num_frames), size=(30, 10), orientation='h', key='-vid_slider-', change_submits=True)],
-                ], 
-                element_justification='c'
-            ),
-            sg.Column([[sg.Text('Transcriptions')]], scrollable=True, key='-transcripts-', s=(500,400))],
+            [
+                sg.Column(theme_editor_column, element_justification='c'),
+                sg.VSeperator(),
+                sg.Column(video_viewer_column,element_justification='c'),
+                sg.VSeperator(),
+                sg.Column(transcripts_colum, scrollable=True, key='-transcripts-', s=(500,400)),
+            ],
+            [sg.HSeparator()],
+            [
+                sg.Column([], element_justification='c'),
+                sg.VSeperator(),
+                sg.Column([], element_justification='c'),
+                sg.VSeperator(),
+                sg.Column(export_button, element_justification='c'),
             ]
+        ]
     
     window = sg.Window('OpenSubVoice', 
                     layout, 
-                    size=(1280, 720), 
                     use_custom_titlebar=True,
                     titlebar_icon="assets/icon_2.png",
                     titlebar_background_color=LIGHT_GRAY if light_mode else DARK_GRAY,

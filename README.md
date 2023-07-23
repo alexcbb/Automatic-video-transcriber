@@ -7,24 +7,27 @@ The idea is to create an automatic and customizable open-source transcriber for 
 
 
 # Future features (TODO List)
-- [ ] Refactor code
-    - [ ] Create config file + argparse
-- [ ] Create a .exe file
+- [ ] Better UI
+    - Use Tkinter
+    - [ ] Improve them and organisation of columns
+- [ ] Create 'Themes' instead of infinite fonts
+    - [ ] Choose fonts
+    - [ ] Put them in a format
+- [ ] Prepare pipeline
+    - [ ] Opening app : load file
+    - [ ] Export file and save it (see how to export/import text)
 - [ ] Create a menu :
     - [ ] Save text to file and load existing text (separate Whisper transcript and text showing up)
-    - [ ] Load new videos
-        - [ ] Check if video file is opened
     - [ ] Ask for a directory to save
-- [ ] Modify text
-    - [ ] Add list with input text for texts translated and timestamps 
+- [ ] Create a .exe file
+- [ ] Create buttons video :
+    - [ ] Play / Pause and forward/Backward buttons
 - [ ] Text animation :
     - [ ] Change orientation
     - [ ] Random highlight color (Not sure if interesting)
 - [ ] Automatic emoji to text
-- [ ] Better UI
-    - [ ] Improve them and organisation of columns
+- [ ] Use faster Whisper : https://github.com/guillaumekln/faster-whisper
 - [ ] Fix bugs :
-    - [ ] Update directly the image before doing anything
-    - [ ] Several same words highlighted on 2 lines
+    - [ ] Problem between two lines : sometimes very close
     - [ ] Last seconds not text
 - [ ] More ? Contact me at my mail : beegbraincontact@gmail.com

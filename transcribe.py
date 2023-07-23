@@ -7,8 +7,8 @@ import PySimpleGUI as sg
 import matplotlib.font_manager as fm
 
 from utils.audio import extract_transcripts
-from utils.text import get_current_text, process_words
-from utils.draw import draw_text_on_image, draw_progress_bar
+from utils.text import get_current_text, process_words, update_timestamps
+from utils.draw import draw_text_on_image, draw_progress_bar, update_frame
 from utils.video import update_video
 from utils.ui import make_window, display_notification
 
@@ -86,15 +86,11 @@ def edit_video(font,
 
 def open_file_popup():
     file_types = [("MP4", "*.mp4"), ("All Files", "*.*")]
-    file_path = sg.popup_get_file("Ouvrir fichier", file_types=file_types)
+    file_path = sg.popup_get_file("Ouvrir fichier", file_types=file_types, keep_on_top=True)
     
     if file_path:
-        with open(file_path, "r") as file:
-            content = file.read()
-            sg.popup_scrolled("Contenu", content)
-
-            # Update the main window with the loaded content
-            window["-video_path-"].update(value=content)
+        return file_path
+    return None
 
 if __name__ == '__main__':
     ################################
@@ -108,8 +104,12 @@ if __name__ == '__main__':
     with open(args.config) as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
+    ### Get the filename
+    video_path = sg.popup_get_file('Fichier à ouvrir')
+    if video_path is None:
+        exit()
+
     ### Prepare parameters
-    video_path = args.video_path if args.video_path else config["path"]["video_path"]
     temp_path = config["path"]["temp_path"]
     final_path = config["path"]["final_path"]
     transcript_path = config["path"]["transcript_path"]
@@ -119,7 +119,7 @@ if __name__ == '__main__':
     cur_frame = 0
 
     ### Handle audio transcription 
-    line_1, line_2, word_timestamps = extract_transcripts(audio_path, video_path, transcript_path)
+    line_1, line_2, word_timestamps = extract_transcripts(audio_path, video_path, transcript_path, use_api=False)
 
     ### Get the list of installed font on the computer and initialize fonts
     all_font_path = fm.findSystemFonts()
@@ -135,14 +135,15 @@ if __name__ == '__main__':
     ratio = frame_height / frame_width
 
     ### Get Layout and create the window
-    window = make_window(fonts, num_frames, line_1, line_2)
+    window = make_window(fonts, num_frames)
 
     image_elem = window['-image-']
     slider_elem = window['-vid_slider-']
     error_elem = window['-error-']
     transcripts = window['-transcripts-']
+    print(word_timestamps)
 
-    event, values = window.read()
+    event, values = window.read(timeout=0)
     timestep = 0
     for current_line_1, current_line_2 in zip(line_1, line_2):
         time_value = current_line_1[0]
@@ -153,77 +154,87 @@ if __name__ == '__main__':
         window.visibility_changed()
         transcripts.contents_changed()
         timestep += 1
-    
+
+    w_width, w_height = window.size
+    update_frame(cap, cur_frame, fps, line_1, line_2, word_timestamps, font, highlight_font,
+            frame_width, w_height, ratio, image_elem)
     is_opening_video = False
     while True:     
-        try:
-            ### Read the events
-            event, values = window.read()
-            if event in (sg.WIN_CLOSED, 'Quitter'):
-                break
-
-            w_width, w_height = window.size
-
-            ret, frame = cap.read()
-            
-            # Convert the frame to PIL Image
-            pil_image = Image.fromarray(cv2.cvtColor(np.array(frame), cv2.COLOR_BGR2RGB))
-
-            # Draw the text and prompt on the PIL Image
-            draw = ImageDraw.Draw(pil_image)
-
-            current_time = cur_frame / fps
-            frame_text_1 = draw_text_on_image(
-                line_1, draw, current_time, font, highlight_font,
-                frame_width, word_timestamps, 50, pil_image)
-            frame_text_2 = draw_text_on_image(
-                line_2, draw, current_time, font, highlight_font,
-                frame_width, word_timestamps, 150, frame_text_1, to_pil=False)
-
-            # Display the frame
-            imS = cv2.resize(frame_text_2, (int((w_height-200)//ratio), w_height-200))
-            imgbytes = cv2.imencode('.png', imS)[1].tobytes()  
-            image_elem.update(data=imgbytes)
-            
-            ### Check values
-            if int(values['-vid_slider-']) != cur_frame-1:
-                cur_frame = int(values['-vid_slider-'])
-                cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
-            slider_elem.update(cur_frame)
-            if values['-list-']:
-                for path in all_font_path:
-                    if values['-list-'][0] == path.split("\\")[-1].split(".")[0]:
-                        font_path = path
-                        cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
-            if values['-font_size-']:
-                font_size = int(values['-font_size-'])
-                font = ImageFont.truetype(font_path, font_size)
-                highlight_font = ImageFont.truetype(font_path, font_size+4)
-                cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
+        ### Read the events
+        event, values = window.read()
+        if event in (sg.WIN_CLOSED, 'Quitter'):
+            break
+        # TODO : only update frame when needed ? 
+        
+        ### Check values
+        if int(values['-vid_slider-']) != cur_frame-1:
+            cur_frame = int(values['-vid_slider-'])
+            cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
+            update_frame(cap, cur_frame, fps, line_1, line_2, word_timestamps, font, highlight_font,
+                    frame_width, w_height, ratio, image_elem)
+        slider_elem.update(cur_frame)
+        if values['-list-']:
+            for path in all_font_path:
+                if values['-list-'][0] == path.split("\\")[-1].split(".")[0]:
+                    font_path = path
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
+                    update_frame(cap, cur_frame, fps, line_1, line_2, word_timestamps, font, highlight_font,
+                            frame_width, w_height, ratio, image_elem)
+        if values['-font_size-']:
+            font_size = int(values['-font_size-'])
+            font = ImageFont.truetype(font_path, font_size)
+            highlight_font = ImageFont.truetype(font_path, font_size+4)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)
+            update_frame(cap, cur_frame, fps, line_1, line_2, word_timestamps, font, highlight_font,
+                    frame_width, w_height, ratio, image_elem)
+        else:
+            font_size = 80
+            font = ImageFont.truetype(font_path, font_size)
+            highlight_font = ImageFont.truetype(font_path, font_size+4)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)   
+            update_frame(cap, cur_frame, fps, line_1, line_2, word_timestamps, font, highlight_font,
+                    frame_width, w_height, ratio, image_elem)
+        ### Check events
+        if event == '-export-' or event == 'Exporter':
+            edit_video(font, highlight_font, line_1, line_2, 
+                        word_timestamps, cap, final_path, audio_path)
+            break
+        elif event == 'Ouvrir':
+            tmp_path = open_file_popup()
+            if tmp_path:
+                video_path = tmp_path
+                filename, ext = os.path.splitext(video_path)
+                audio_path = f"{filename}.wav"
+                line_1, line_2, word_timestamps = extract_transcripts(audio_path, video_path)
+                cap, fps, num_frames, frame_width, frame_height = update_video(video_path)
+                update_frame(cap, cur_frame, fps, line_1, line_2, word_timestamps, font, highlight_font,
+                        frame_width, w_height, ratio, image_elem)
+                
+                timestep = 0
+                for current_line_1, current_line_2 in zip(line_1, line_2):
+                    if f"-timestep-{timestep}-line1-" in window.key_dict.keys():
+                        window[f"-timestep-{timestep}-line1-"].update(current_line_1[1])
+                        window[f"-timestep-{timestep}-line2-"].update(current_line_2[1])
+                    else:
+                        time_value = current_line_1[0]
+                        window.extend_layout(transcripts, 
+                                            [[sg.Text(f'De {time_value[0]}s à {time_value[1]}s'), 
+                                            sg.Input(default_text=current_line_1[1], key=f'-timestep-{timestep}-line1-', size=20, change_submits=True),
+                                            sg.Input(default_text=current_line_2[1], key=f'-timestep-{timestep}-line2-', size=20, change_submits=True)]])
+                    timestep += 1
+                window.visibility_changed()
+                transcripts.contents_changed()
+        if "timestep" in event:
+            split_event = event.split("-")
+            line_id = int(split_event[3][-1])
+            timestep_id = int(split_event[2])
+            text = values[event]
+            if line_id == 1:
+                line_1[timestep_id] = (line_1[timestep_id][0], text, line_1[timestep_id][2])
             else:
-                font_size = 80
-                font = ImageFont.truetype(font_path, font_size)
-                highlight_font = ImageFont.truetype(font_path, font_size+4)
-                cap.set(cv2.CAP_PROP_POS_FRAMES, cur_frame)   
-            
-            if "timestep" in event:
-                split_event = event.split("-")
-                line_id = int(split_event[3][-1])
-                timestep_id = int(split_event[2])
-                text = values[event]
-                if line_id == 1:
-                    line_1[timestep_id] = (line_1[timestep_id][0], text)
-                else:
-                    line_2[timestep_id] = (line_2[timestep_id][0], text)
-            ### Check events
-            if event == '-export-' or event == 'Exporter':
-                edit_video(font, highlight_font, line_1, line_2, 
-                           word_timestamps, cap, final_path, audio_path)
-                break
-            elif event == 'Ouvrir':
-                open_file_popup()
-
-        except Exception as inst:
-            error_elem.update("Erreur : " + str(inst) + "; redémarrez l'application")
+                line_2[timestep_id] = (line_2[timestep_id][0], text, line_1[timestep_id][2])
+            update_timestamps(line_1, line_2, word_timestamps)
+            update_frame(cap, cur_frame, fps, line_1, line_2, word_timestamps, font, highlight_font,
+                    frame_width, w_height, ratio, image_elem)
     window.close()
 
