@@ -10,9 +10,108 @@ import matplotlib.font_manager as fm
 from PIL import Image, ImageDraw, ImageFont
 from tkinter import ttk
 from utils.audio import extract_transcripts
+import numpy as np
+import math
 
 ctk.set_appearance_mode("dark")  # Modes: system (default), light, dark
 ctk.set_default_color_theme("dark-blue")  # Themes: blue (default), dark-blue, green
+
+def get_current_text(text_timestamps, frametime):
+    """
+    Returns the current sentence said associated with the given frame
+    """
+    for timestamp, text, ids in text_timestamps:
+        if frametime >= timestamp[0] and frametime < timestamp[1]:
+            return text, ids
+    return '', -1
+
+def get_current_word(word_timestamps, frametime):
+    """
+    Returns the current word said associated with the given frame
+    """
+    for timestamp, word, id in word_timestamps:
+        if frametime >= timestamp[0] and frametime < timestamp[1]:
+            return word, id
+    return '', -1
+
+def draw_text_on_image(
+        text_timestamps, 
+        draw, 
+        current_time,
+        font, 
+        highlight_font,
+        frame_width,
+        word_timestamps,
+        offset_top,
+        pil_image,
+        to_pil=True):
+    
+    text, ids = get_current_text(text_timestamps, current_time)
+    print(f"Current text : {text}")
+    words = text.split()
+    word_sizes = [draw.textsize(word, font=font) for word in words]
+    text_width, text_height = draw.textsize(text, font=font)
+    text_origin = ((frame_width - text_width) // 2,  text_height + offset_top)
+    highlight_color = (255, 255, 0)
+    stroke_color = (0, 0, 0)
+    stroke_width = 10
+    text_color = (255, 255, 255)
+
+    highlighted_word, word_id = get_current_word(word_timestamps, current_time)
+    print(f"Highlighted word : {highlighted_word}")
+    current_pos = text_origin[0]
+    highlight_space = 0
+    for word, size in zip(words, word_sizes):
+        # Check if the word needs to be highlighted
+        if highlighted_word.lower().replace(" ", "") == word.lower().replace(" ", ""):
+            # Draw the highlighted word with a different color
+            draw.text((current_pos-4, text_origin[1]-4), word, font=highlight_font, fill=highlight_color, stroke_width=stroke_width, stroke_fill=stroke_color)
+            highlight_space = 10
+        else:
+            # Draw the regular word with the default color
+            draw.text((current_pos+highlight_space, text_origin[1]), word, font=font, fill=text_color, stroke_width=stroke_width, stroke_fill=stroke_color)
+
+        # Update the starting position for the next word
+        current_pos += (size[0] + 20)
+    if to_pil:
+        return pil_image
+    # Convert the PIL Image back to OpenCV format
+    return cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+
+def draw_progress_bar(completion, img):
+    line_thickness = 10
+    y = math.ceil(img.shape[1] - img.shape[1]/25)
+    x = 0
+    w = img.shape[0] // 3
+    cv2.putText(img, f"Progression {int(completion*100)}%", org=(20, y + 30), fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
+                fontScale=0.7, color=(255, 255, 255), thickness = 10, lineType=cv2.LINE_AA)
+    cv2.putText(img, f"Progression {int(completion*100)}%", org=(20, y + 30), fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
+                fontScale=0.7, color=(0, 0, 255), thickness = 2, lineType=cv2.LINE_AA)
+    cv2.line(img, (x, y), (w, y), (255,255,255), line_thickness)
+    cv2.line(img, (x, y), (math.ceil(w*completion), y), (0,0,255), line_thickness)
+
+def update_frame(cap, cur_frame, fps, line_1, line_2, word_timestamps, font, highlight_font,
+        frame_width, w_height, ratio, image_elem):
+    ret, frame = cap.read()
+            
+    # Convert the frame to PIL Image
+    pil_image = Image.fromarray(cv2.cvtColor(np.array(frame), cv2.COLOR_BGR2RGB))
+
+    # Draw the text and prompt on the PIL Image
+    draw = ImageDraw.Draw(pil_image)
+
+    current_time = cur_frame / fps
+    frame_text_1 = draw_text_on_image(
+        line_1, draw, current_time, font, highlight_font,
+        frame_width, word_timestamps, 50, pil_image)
+    frame_text_2 = draw_text_on_image(
+        line_2, draw, current_time, font, highlight_font,
+        frame_width, word_timestamps, 150, frame_text_1, to_pil=False)
+
+    # Display the frame
+    imS = cv2.resize(frame_text_2, (int((w_height-200)//ratio), w_height-200))
+    imgbytes = cv2.imencode('.png', imS)[1].tobytes()  
+    image_elem.update(data=imgbytes)
 
 # TODO : adapt this to get right font
 class ScrollableLabelButtonFrame(ctk.CTkScrollableFrame):
@@ -51,11 +150,10 @@ class ScrollableTranscripts(ctk.CTkScrollableFrame):
         self.label_list = []
         self.text_list = []
 
-    def add_transcript(self, text, image=None):
-        
-        label = ctk.CTkLabel(self, text=text, image=image, padx=5)
-        textbox = ctk.CTkTextbox(self, corner_radius=10)
-        textbox.insert("0.0", "Some example text!\n")
+    def add_transcript(self, label, text, image=None):
+        label = ctk.CTkLabel(self, text=label, image=image, padx=5)
+        textbox = ctk.CTkTextbox(self, corner_radius=10, height=20)
+        textbox.insert("0.0", text)
         label.pack(side='top', pady=(0, 10))
         textbox.pack(side='top',  fill='x', pady=(0, 10), padx=5)
         self.label_list.append(label)
@@ -69,9 +167,18 @@ class ScrollableTranscripts(ctk.CTkScrollableFrame):
                 self.label_list.remove(label)
                 self.button_list.remove(button)
                 return
+            
+    def change_transcript(self, label, text, id):
+        old_label = self.label_list[id]
+        self.label_list[id].destroy()
+        self.label_list[id].remove(old_label)
+        self.text_list[id] = ctk.CTkLabel(self, text=label, padx=5)
+
+        self.text_list[id].delete("0.0", "end")
+        self.text_list[id].insert("0.0", text)
 
 class App:
-    def __init__(self, window, window_title, video_path="short.mp4"):
+    def __init__(self, window, window_title, config,  video_path="short.mp4"):
         self.window = window
         self.window.title(window_title)
         self.video_path = video_path
@@ -80,7 +187,18 @@ class App:
         self.resize_frame =(320, 500)
         self.state = "Play"
 
-        # open video
+        temp_path = config["path"]["temp_path"]
+        final_path = config["path"]["final_path"]
+        transcript_path = config["path"]["transcript_path"]
+        filename, ext = os.path.splitext(video_path)
+        audio_path = f"{filename}.wav"
+        counter_color_change = 0
+        cur_frame = 0
+
+        ### Handle audio transcription 
+        line_1, line_2, word_timestamps = extract_transcripts(audio_path, video_path, transcript_path, use_api=False)
+
+        # Open video
         self.vid = VideoOpenCv(self.video_path)
 
         # Create three frames
@@ -102,15 +220,18 @@ class App:
         self.themes = ScrollableLabelButtonFrame(self.left_frame, width=200)
         self.themes.pack(side='top', padx=10, pady=5)
 
-        for i in range(1, 10):
-            self.themes.add_item(f"Police {i}")
-
-        """all_font_path = fm.findSystemFonts()
+        # Get all fonts
+        all_font_path = fm.findSystemFonts()
         font_path = all_font_path[0]
-        i = 0
-        for path in all_font_path: 
-            self.themes.add_item(path.split("\\")[-1].split(".")[0])
-            i+= 1"""
+        fonts = []
+        for path in all_font_path:
+            fonts.append(path.split("\\")[-1].split(".")[0])
+        fonts.sort()
+        font = ImageFont.truetype(font_path, 40)
+        highlight_font = ImageFont.truetype(font_path, 44)
+
+        for font in fonts:
+            self.themes.add_item(font)
 
         #### Size fonts
         self.lbl_font = ctk.CTkLabel(self.left_frame, width=30, text=f"Taille police : 50")
@@ -145,13 +266,15 @@ class App:
         self.lbl = ctk.CTkLabel(self.right_frame, width=30, text=f"Transcriptions:")
         self.lbl.pack(side='top',  padx=5,  pady=5)
 
+        # Create the box containing the transcripts
         self.transcript_box = ctk.CTkFrame(self.right_frame,  height=200)
         self.transcript_box.pack(side='top', padx=10, pady=5, fill='both', expand=True)
         self.transcript = ScrollableTranscripts(self.transcript_box)
         self.transcript.pack(side='left', fill='both', padx=5,  pady=5, expand=True)
         
-        for i in range(1, 20):
-            self.transcript.add_transcript(f"This is a text {i}")
+        for l1, l2 in zip(line_1, line_2):
+            self.transcript.add_transcript(text=l1[1], label=f"Ligne 1 de {l1[0][0]}s à {l1[0][1]}s")
+            self.transcript.add_transcript(text=l2[1], label=f"Ligne 2 de {l2[0][0]}s à {l2[0][1]}s")
             
         self.export_button=ctk.CTkButton(self.right_frame, width=30, text="Exporter", command=window.quit)
         self.export_button.pack(side='top',  padx=5,  pady=5)
@@ -240,7 +363,7 @@ if __name__ == '__main__':
     ################################
     #       Parse arguments        #  
     ################################
-    """parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser()
     parser.add_argument("config", help="Path to the config file")
     parser.add_argument("--video_path", type=str, default=None, help="Path to the input video")
     args = parser.parse_args()
@@ -250,30 +373,13 @@ if __name__ == '__main__':
 
         
     ### Get the filename
-    video_path = sg.popup_get_file('Fichier à ouvrir') # TODO : replace pysimplegui with Tkinter
+    # TODO : Need to be changed to get path another way
+    video_path = None
+    """video_path = sg.popup_get_file('Fichier à ouvrir') # TODO : replace pysimplegui with Tkinter
     if video_path is None:
-        exit()
+        exit()"""
 
-    ### Prepare parameters
-    temp_path = config["path"]["temp_path"]
-    final_path = config["path"]["final_path"]
-    transcript_path = config["path"]["transcript_path"]
-    filename, ext = os.path.splitext(video_path)
-    audio_path = f"{filename}.wav"
-    counter_color_change = 0
-    cur_frame = 0
-
-    ### Handle audio transcription 
-    line_1, line_2, word_timestamps = extract_transcripts(audio_path, video_path, transcript_path, use_api=False)
-
-    
-    all_font_path = fm.findSystemFonts()
-    font_path = all_font_path[0]
-    fonts = []
-    for path in all_font_path:
-        fonts.append(path.split("\\")[-1].split(".")[0])
-    fonts.sort()
-    font = ImageFont.truetype(font_path, 40)
-    highlight_font = ImageFont.truetype(font_path, 44)"""
-
-    App(ctk.CTk(), "OpenSubVoice", video_path="D:\Vidéos FINALES\Cette IA joue à minecraft seule.mp4")
+    App(ctk.CTk(), 
+        "OpenSubVoice", 
+        video_path=video_path if video_path is not None else "D:\Vidéos FINALES\Cette IA joue à minecraft seule.mp4",
+        config=config)

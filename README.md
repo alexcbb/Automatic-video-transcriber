@@ -9,10 +9,14 @@ The idea is to create an automatic and customizable open-source transcriber for 
 # Future features (TODO List)
 - [ ] Better UI
     - Use Tkinter
+    - [x] Add text on right
+    - [ ] Print text on frame
+    - [ ] Update text
     - [ ] Improve them and organisation of columns
 - [ ] Create 'Themes' instead of infinite fonts
     - [ ] Choose fonts
     - [ ] Put them in a format
+    - [ ] Create a tutorial to add new fonts
 - [ ] Prepare pipeline
     - [ ] Opening app : load file
     - [ ] Export file and save it (see how to export/import text)
