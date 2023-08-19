@@ -1,0 +1,5 @@
+theme:
+  font: "bebas.otf"
+  color: "white"
+  highlight-color: "yellow"
+  animation: "zoom"

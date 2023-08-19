@@ -6,9 +6,8 @@ import argparse
 import yaml
 import os
 import PySimpleGUI as sg
-import matplotlib.font_manager as fm
 from PIL import Image, ImageDraw, ImageFont
-from tkinter import ttk
+from tkinter import ttk, font
 from utils.audio import extract_transcripts
 import numpy as np
 import math
@@ -47,18 +46,16 @@ def draw_text_on_image(
         to_pil=True):
     
     text, ids = get_current_text(text_timestamps, current_time)
-    print(f"Current text : {text}")
     words = text.split()
     word_sizes = [draw.textsize(word, font=font) for word in words]
     text_width, text_height = draw.textsize(text, font=font)
     text_origin = ((frame_width - text_width) // 2,  text_height + offset_top)
-    highlight_color = (255, 255, 0)
+    highlight_color = (0, 255, 255)
     stroke_color = (0, 0, 0)
     stroke_width = 10
     text_color = (255, 255, 255)
 
     highlighted_word, word_id = get_current_word(word_timestamps, current_time)
-    print(f"Highlighted word : {highlighted_word}")
     current_pos = text_origin[0]
     highlight_space = 0
     for word, size in zip(words, word_sizes):
@@ -90,29 +87,6 @@ def draw_progress_bar(completion, img):
     cv2.line(img, (x, y), (w, y), (255,255,255), line_thickness)
     cv2.line(img, (x, y), (math.ceil(w*completion), y), (0,0,255), line_thickness)
 
-def update_frame(cap, cur_frame, fps, line_1, line_2, word_timestamps, font, highlight_font,
-        frame_width, w_height, ratio, image_elem):
-    ret, frame = cap.read()
-            
-    # Convert the frame to PIL Image
-    pil_image = Image.fromarray(cv2.cvtColor(np.array(frame), cv2.COLOR_BGR2RGB))
-
-    # Draw the text and prompt on the PIL Image
-    draw = ImageDraw.Draw(pil_image)
-
-    current_time = cur_frame / fps
-    frame_text_1 = draw_text_on_image(
-        line_1, draw, current_time, font, highlight_font,
-        frame_width, word_timestamps, 50, pil_image)
-    frame_text_2 = draw_text_on_image(
-        line_2, draw, current_time, font, highlight_font,
-        frame_width, word_timestamps, 150, frame_text_1, to_pil=False)
-
-    # Display the frame
-    imS = cv2.resize(frame_text_2, (int((w_height-200)//ratio), w_height-200))
-    imgbytes = cv2.imencode('.png', imS)[1].tobytes()  
-    image_elem.update(data=imgbytes)
-
 # TODO : adapt this to get right font
 class ScrollableLabelButtonFrame(ctk.CTkScrollableFrame):
     def __init__(self, master, command=None, **kwargs):
@@ -124,11 +98,11 @@ class ScrollableLabelButtonFrame(ctk.CTkScrollableFrame):
         self.label_list = []
         self.button_list = []
 
-    def add_item(self, item, image=None):
+    def add_item(self, item, size=20, image=None):
         label = ctk.CTkLabel(self, text=item, image=image, compound="left", padx=5, anchor="w")
         button = ctk.CTkButton(self, text="Command", width=100, height=24)
         if self.command is not None:
-            button.configure(command=lambda: self.command(item))
+            button.configure(command=lambda: self.command(size, item))
         label.grid(row=len(self.label_list), column=0, pady=(0, 10), sticky="w")
         button.grid(row=len(self.button_list), column=1, pady=(0, 10), padx=5)
         self.label_list.append(label)
@@ -189,17 +163,27 @@ class App:
 
         temp_path = config["path"]["temp_path"]
         final_path = config["path"]["final_path"]
+        theme_name = config["path"]["theme"]
         transcript_path = config["path"]["transcript_path"]
         filename, ext = os.path.splitext(video_path)
         audio_path = f"{filename}.wav"
         counter_color_change = 0
-        cur_frame = 0
 
         ### Handle audio transcription 
-        line_1, line_2, word_timestamps = extract_transcripts(audio_path, video_path, transcript_path, use_api=False)
+        self.line_1, self.line_2, self.word_timestamps = extract_transcripts(audio_path, video_path, transcript_path, use_api=False)
 
         # Open video
-        self.vid = VideoOpenCv(self.video_path)
+
+        self.font_dir = "./assets/fonts/"
+        all_font_path = os.listdir(self.font_dir)
+        theme_path = "./assets/themes/" + theme_name + ".yaml"
+        with open(theme_path) as f:
+            theme_config = yaml.load(f, Loader=yaml.FullLoader)
+        font_path = self.font_dir + theme_config["font"]
+
+        font = ImageFont.truetype(font_path, 40)
+        highlight_font = ImageFont.truetype(font_path, 44)
+        self.vid = VideoOpenCv(font, highlight_font, self.font_dir, self.video_path)
 
         # Create three frames
         self.left_frame =  ctk.CTkFrame(window,  width=100,  height=  400)
@@ -217,21 +201,14 @@ class App:
         self.lbl = ctk.CTkLabel(self.left_frame, width=30, text=f"Edition:")
         self.lbl.pack(side='top',  padx=5,  pady=5)
         #### Setup fonts list
-        self.themes = ScrollableLabelButtonFrame(self.left_frame, width=200)
+        self.themes = ScrollableLabelButtonFrame(self.left_frame, width=200, command=self.vid.change_font_name)
         self.themes.pack(side='top', padx=10, pady=5)
 
         # Get all fonts
-        all_font_path = fm.findSystemFonts()
-        font_path = all_font_path[0]
         fonts = []
         for path in all_font_path:
             fonts.append(path.split("\\")[-1].split(".")[0])
         fonts.sort()
-        font = ImageFont.truetype(font_path, 40)
-        highlight_font = ImageFont.truetype(font_path, 44)
-
-        for font in fonts:
-            self.themes.add_item(font)
 
         #### Size fonts
         self.lbl_font = ctk.CTkLabel(self.left_frame, width=30, text=f"Taille police : 50")
@@ -239,6 +216,10 @@ class App:
         self.font_size = ctk.CTkSlider(self.left_frame, from_=30, to=120, command=self.update_font_size)
         self.font_size.set(50)
         self.font_size.pack(side='top', padx=5, pady=5)
+
+        # TODO : only have a selection of fonts + tutorial to add more
+        for font in fonts:
+            self.themes.add_item(font, self.font_size)
 
         ################### 
         ### Center frame
@@ -272,7 +253,7 @@ class App:
         self.transcript = ScrollableTranscripts(self.transcript_box)
         self.transcript.pack(side='left', fill='both', padx=5,  pady=5, expand=True)
         
-        for l1, l2 in zip(line_1, line_2):
+        for l1, l2 in zip(self.line_1, self.line_2):
             self.transcript.add_transcript(text=l1[1], label=f"Ligne 1 de {l1[0][0]}s à {l1[0][1]}s")
             self.transcript.add_transcript(text=l2[1], label=f"Ligne 2 de {l2[0][0]}s à {l2[0][1]}s")
             
@@ -303,9 +284,12 @@ class App:
 
     def update_font_size(self, value):
         self.lbl_font.configure(text = f"Taille police : {int(value)}")
+        self.vid.change_font_size(int(value))
 
     def update_frame_id(self, frame_id):
-        new_frame = self.vid.new_frame(frame_id=frame_id)[1]
+        self.frame_id = frame_id
+        frame = self.vid.new_frame(frame_id=frame_id)[1]
+        new_frame = self.vid.update_frame(frame, self.frame_id, self.line_1, self.line_2, self.word_timestamps)
         self.change_frame(new_frame)
 
     def update(self):
@@ -317,7 +301,8 @@ class App:
             if ret:
                 self.change_frame(frame)
                 self.video_frame_slider.set(self.frame_id)
-
+            new_frame = self.vid.update_frame(frame, self.frame_id, self.line_1, self.line_2, self.word_timestamps)
+            self.change_frame(new_frame)
         self.window.after(self.delay, self.update)
 
     def change_frame(self, frame):
@@ -326,7 +311,7 @@ class App:
         self.canvas.create_image(self.resize_frame[0]/2, self.resize_frame[1]/2, image = self.photo)
 
 class VideoOpenCv:
-    def __init__(self, video_path="short.mp4"):
+    def __init__(self, font, highlight_font, font_dir="", video_path="short.mp4"):
         self.vid = cv2.VideoCapture(video_path)
 
         # Open the video source
@@ -338,6 +323,45 @@ class VideoOpenCv:
         self.height = int(self.vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.fps = self.vid.get(cv2.CAP_PROP_FPS)
         self.num_frames = self.vid.get(cv2.CAP_PROP_FRAME_COUNT)
+        self.font = font
+        self.highlight_font = highlight_font
+        self.ratio = self.height / self.width
+        self.font_dir = font_dir
+        print(self.font_dir)
+
+    def update_frame(self, frame, frame_id, line_1, line_2, word_timestamps):
+        # Convert the frame to PIL Image
+        pil_image = Image.fromarray(cv2.cvtColor(np.array(frame), cv2.COLOR_BGR2RGB))
+
+        # Draw the text and prompt on the PIL Image
+        draw = ImageDraw.Draw(pil_image)
+
+        current_time = frame_id / self.fps
+        frame_text_1 = draw_text_on_image(
+            line_1, draw, current_time, self.font, self.highlight_font,
+            self.width, word_timestamps, 50, pil_image)
+        frame_text_2 = draw_text_on_image(
+            line_2, draw, current_time, self.font, self.highlight_font,
+            self.width, word_timestamps, 150, frame_text_1, to_pil=False)
+
+        return frame_text_2
+
+    def change_font_size(self, size):
+        name = self.font.getname()[0]
+        name = self.font_dir + name
+        name = name.lower()
+        for ext in ["ttf", "otf"]:
+            font_file = f"{name}.{ext}"
+            if os.path.isfile(font_file):
+                name = font_file
+                break
+        self.font = ImageFont.truetype(name, size)
+        self.highlight_font = ImageFont.truetype(name, size+5)
+
+    def change_font_name(self, size, name):
+        name = self.font_dir + name
+        self.font = ImageFont.truetype(name, size)
+        self.highlight_font = ImageFont.truetype(name, size+5)
  
     def get_frame(self):
         if self.vid.isOpened():

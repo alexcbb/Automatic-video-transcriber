@@ -3,3 +3,4 @@ path:
   temp_path: "temp.mp4"
   final_path: "final.mp4"
   transcript_path: "new_word_timestamps.txt"
+  theme: classic

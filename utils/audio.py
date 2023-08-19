@@ -5,6 +5,7 @@ import pickle
 import os
 import requests
 import json
+from llama_cpp import Llama
 
 # TODO : check API_token for user 
 API_TOKEN = "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" 
@@ -42,6 +43,9 @@ def extract_word_timestamps(audio_path : str, whisper_size : str ="medium", lang
         result =  model.transcribe(audio, **transcribe_options)
 
     segment = result["segments"]
+    # Delete model from GPU
+    del model
+    del audio
 
     timestamps = []
     for el in segment:
@@ -49,7 +53,7 @@ def extract_word_timestamps(audio_path : str, whisper_size : str ="medium", lang
             timestamps.append([(word['start'], word['end']), word['word'].replace(" ", "")])
     return timestamps
 
-def extract_transcripts(audio_path :str , video_path : str , transcript_path: str=None, use_api=False):
+def extract_transcripts(audio_path :str , video_path : str , transcript_path: str=None, llama_path: str=None, use_api=False):
     # TODO : load the text properly
     # TODO : add a progress bar while loading text
     clip = VideoFileClip(video_path)
@@ -72,6 +76,19 @@ def extract_transcripts(audio_path :str , video_path : str , transcript_path: st
         with open(transcript_path, "rb") as f:
             temp_word_timestamp = pickle.load(f)
         line_1, line_2, word_timestamps = process_words(temp_word_timestamp)
+
+    if llama_path:
+        llm = Llama(model_path=llama_path)
+
+
+        stream = llm("TODO create prompt",
+            stream=True,
+        )
+
+        text = ""
+        for output in stream:
+            text += output['choices'][0]['text']
+            print(text)
     
     return line_1, line_2, word_timestamps
     

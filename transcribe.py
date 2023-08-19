@@ -15,6 +15,9 @@ from utils.ui import make_window, display_notification
 import argparse
 import yaml
 
+import json
+import argparse
+
 
 def edit_video(font, 
                highlight_font, 
@@ -98,6 +101,7 @@ if __name__ == '__main__':
     ################################
     parser = argparse.ArgumentParser()
     parser.add_argument("config", help="Path to the config file")
+    parser.add_argument("--llama_model", type=str, default="../Llama/models/7B/ggml-model.bin")
     parser.add_argument("--video_path", type=str, default=None, help="Path to the input video")
     args = parser.parse_args()
 

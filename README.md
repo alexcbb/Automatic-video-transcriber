@@ -10,8 +10,9 @@ The idea is to create an automatic and customizable open-source transcriber for 
 - [ ] Better UI
     - Use Tkinter
     - [x] Add text on right
-    - [ ] Print text on frame
+    - [x] Print text on frame
     - [ ] Update text
+    - [ ] Change buttons Play/Forward/Backward
     - [ ] Improve them and organisation of columns
 - [ ] Create 'Themes' instead of infinite fonts
     - [ ] Choose fonts
