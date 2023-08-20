@@ -5,7 +5,6 @@ The idea is to create an automatic and customizable open-source transcriber for 
 # Installation instructions
 
 
-
 # Future features (TODO List)
 - [ ] Better UI
     - Use Tkinter
@@ -14,8 +13,10 @@ The idea is to create an automatic and customizable open-source transcriber for 
     - [ ] Update text
     - [ ] Change buttons Play/Forward/Backward
     - [ ] Improve them and organisation of columns
+- [ ] Text Position value changes : add a way to change value
+    - [ ] Change text usage by warping instead of using two lines : https://stackoverflow.com/questions/7698231/pil-draw-multiline-text-on-image
 - [ ] Create 'Themes' instead of infinite fonts
-    - [ ] Choose fonts
+    - [x] Choose fonts
     - [ ] Put them in a format
     - [ ] Create a tutorial to add new fonts
 - [ ] Prepare pipeline

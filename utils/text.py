@@ -69,8 +69,7 @@ def update_timestamps(line_1, line_2, word_timestamps):
         for current_line_1, current_line_2 in zip(line_1, line_2):
             #if word in current_line_1 or word in current_line_2
             pass
-
-
+        
 def get_current_text(text_timestamps, frametime):
     """
     Returns the current sentence said associated with the given frame
